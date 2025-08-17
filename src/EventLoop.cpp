@@ -1,9 +1,9 @@
-#include <Eventloop.hpp>
-#include <Logger.h>
+#include <EventLoop.hpp>
+#include <Logger.hpp>
 #include <sys/eventfd.h>
 
-// 防止一个线程创建多个Eventloop实例,如果一个线程以及经创建了一个Eventloop实例，那么这个值会被设置成this
-thread_local Eventloop *t_loopInThisThread = nullptr;
+// 防止一个线程创建多个EventLoop实例,如果一个线程以及经创建了一个EventLoop实例，那么这个值会被设置成this
+thread_local EventLoop *t_loopInThisThread = nullptr;
 
 // 定义默认的Poller IO复用接口的超时时间
 const int kPollTimeMs = 10000;
@@ -34,16 +34,16 @@ int creatEventfd()
     return evtfd;
 }
 
-// Eventloop类的构造函数
-Eventloop::Eventloop()
+// EventLoop类的构造函数
+EventLoop::EventLoop()
     : looping_(false), quit_(false), callingPendingFunctors_(false),
       threadId_(CurrentThread::tid()), poller_(Poller::newDefaultPoller(this)),
       wakeupFd_(creatEventfd()), wakeupChannel_(new Channel(this, wakeupFd_))
 {
-    LOG_DEBUG << "Eventloop created " << this << " in thread " << threadId_;
+    LOG_DEBUG << "EventLoop created " << this << " in thread " << threadId_;
     if (t_loopInThisThread)
     {
-        LOG_FATAL << "Another Eventloop " << t_loopInThisThread
+        LOG_FATAL << "Another EventLoop " << t_loopInThisThread
                   << " exists in this thread " << threadId_;
     }
     else
@@ -51,26 +51,26 @@ Eventloop::Eventloop()
         t_loopInThisThread = this;
     }
     wakeupChannel_->setReadCallback(
-        std::bind(&Eventloop::handleRead,
+        std::bind(&EventLoop::handleRead,
                   this)); // 设置wakeupfd的事件类型以及发生事件后的回调操作
     wakeupChannel_
         ->enableReading(); // 每一个EventLoop都将监听wakeupChannel_的EPOLL读事件了
 }
-// Eventloop类的析构函数
-Eventloop::~Eventloop()
+// EventLoop类的析构函数
+EventLoop::~EventLoop()
 {
     wakeupChannel_->disableAll(); // 给Channel移除所有感兴趣的事件
-    wakeupChannel_->remove();     // 把Channel从Eventlopp中删除
+    wakeupChannel_->remove();     // 把Channel从EventLoop中删除
     ::close(wakeupFd_);           // 关闭wakeupFd_文件描述符
-    t_loopInThisThread = nullptr; // 清除当前线程的Eventloop实例
+    t_loopInThisThread = nullptr; // 清除当前线程的EventLoop实例
 }
 
 // 开启事件循环
-void Eventloop::loop()
+void EventLoop::loop()
 {
     looping_ = true;
     quit_ = false;
-    LOG_INFO << "Eventloop start looping";
+    LOG_INFO << "EventLoop start looping";
 
     while (!quit_)
     {
@@ -93,7 +93,7 @@ void Eventloop::loop()
          **/
         doPendingFunctors();
     }
-    LOG_INFO << "Eventloop stop looping";
+    LOG_INFO << "EventLoop stop looping";
     looping_ = false;
 }
 /**
@@ -110,7 +110,7 @@ void Eventloop::loop()
  *通过生产者消费者模型即可实现线程安全的队列 ！！！ 但是muduo通过wakeup()机制
  *使用eventfd创建的wakeupFd_ notify 使得mainloop和subloop之间能够进行通信
  **/
-void Eventloop::quit()
+void EventLoop::quit()
 {
     quit_ = true;
     if (!isInloopThread())
@@ -120,7 +120,7 @@ void Eventloop::quit()
 }
 
 // 在当前loop中执行cb
-void Eventloop::runInLoop(Functor cb)
+void EventLoop::runInLoop(Functor cb)
 {
     if (isInLoopThread()) // 如果当前线程是EventLoop所属线程
     {
@@ -132,7 +132,7 @@ void Eventloop::runInLoop(Functor cb)
     }
 }
 // 把上层注册的回调函数cb放入队列中，唤醒loop所在的线程，执行cb
-void Eventloop::queueInLoop(Functor cb)
+void EventLoop::queueInLoop(Functor cb)
 {
     {
         std::unique_lock<std::mutex> lock(
@@ -152,7 +152,7 @@ void Eventloop::queueInLoop(Functor cb)
     }
 }
 
-void Eventloop::handleRead()
+void EventLoop::handleRead()
 {
     uint64_t one = 1;
     // 读取wakeupFd_的8字节数据，唤醒阻塞的epoll_wait
@@ -162,38 +162,38 @@ void Eventloop::handleRead()
     if (n != sizeof(one))
     {
         // 如果读取的字节数不是8字节，说明发生了错误
-        LOG_ERROR << "Eventloop::handleRead() reads " << n << " bytes instead of 8";
+        LOG_ERROR << "EventLoop::handleRead() reads " << n << " bytes instead of 8";
     }
 }
 
 // 用来唤醒loop所在线程 向wakeupFd_写一个数据 wakeupChannel就发生读事件
 // 当前loop线程就会被唤醒
-void Eventloop::wakeup()
+void EventLoop::wakeup()
 {
     uint64_t one = 1;
     ssize_t n = write(wakeupFd_, &one, sizeof(one));
     if (n != sizeof(one))
     {
         // 如果写入的字节数不是8字节，说明发生了错误
-        LOG_ERROR << "Eventloop::wakeup() writes " << n << " bytes instead of 8";
+        LOG_ERROR << "EventLoop::wakeup() writes " << n << " bytes instead of 8";
     }
 }
 
-// Eventloop的方法 => Poller的方法
-void Eventloop::updateChannel(Channel *channel)
+// EventLoop的方法 => Poller的方法
+void EventLoop::updateChannel(Channel *channel)
 {
     poller_->updateChannel(channel);
 }
-void Eventloop::removeChannel(Channel *channel)
+void EventLoop::removeChannel(Channel *channel)
 {
     poller_->removeChannel(channel);
 }
-bool Eventloop::hasChannel(Channel *channel)
+bool EventLoop::hasChannel(Channel *channel)
 {
     return poller_->hasChannel(channel);
 }
 
-void Eventloop::doPendingFunctors() S
+void EventLoop::doPendingFunctors() S
 {
     std::vector<Functor> functors;
     callingPendingFunctors_ = true; // 标记当前loop正在执行回调操作

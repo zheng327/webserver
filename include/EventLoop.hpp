@@ -5,13 +5,13 @@
 // 事件循环类 主要包含两大模块 Channel Poller
 // Channel封装了sockfd和感兴趣的事件以及发生的事件
 // Poller封装了IO多路复用epoll
-class Eventloop
+class EventLoop
 {
 public:
     using Functor = std::function<void()>;
 
-    Eventloop() = default;
-    ~Eventloop() = default;
+    EventLoop() = default;
+    ~EventLoop() = default;
 
     // 开启事件循环
     void loop();
@@ -28,13 +28,13 @@ public:
     // 通过eventfd唤醒loop所在的线程
     void wakeup();
 
-    // Eentloop的方法 => Poller的方法
+    // EentLoop的方法 => Poller的方法
     void updateChannel(Channel *channel);
     void removeChannel(Channel *channel);
     bool hasChannel(Channel *channel);
 
     // 判断EventLoop对象是否在自己的线程里
-    // threadId_为Eentloop创建时的线程id，CurrentThread::tid()为当前线程id
+    // threadId_为EentLoop创建时的线程id，CurrentThread::tid()为当前线程id
     bool isInLoopThread() const { return threadId_ == CurrentThread::tid(); }
 
     /**
